@@ -1,69 +1,180 @@
-import Image from "next/image";
+import Header from "@/components/website/Header";
+import PostCard from "@/components/website/PostCard";
+import Footer from "@/components/website/Footer";
 
-export default function Home() {
+async function getBlogs() {
+  try {
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3001";
+
+    const response = await fetch(`${baseUrl}/api/blogs`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+
+    return data.blogs || [];
+  } catch (error) {
+    console.error("FETCH BLOGS ERROR:", error);
+    return [];
+  }
+}
+
+export default async function Home({ searchParams }) {
+  const params = await searchParams;
+
+  const query = params?.q?.toLowerCase() || "";
+  const currentPage = Number(params?.page) || 1;
+
+  // MongoDB se live blogs
+  const blogs = await getBlogs();
+
+  // SEARCH
+  const filteredBlogs = blogs.filter((blog) => {
+    return (
+      blog.title?.toLowerCase().includes(query) ||
+      blog.description?.toLowerCase().includes(query)
+    );
+  });
+
+  // 6 cards per page
+  const postsPerPage = 6;
+
+  const totalPages = Math.ceil(
+    filteredBlogs.length / postsPerPage
+  );
+
+  const safeTotalPages = Math.max(totalPages, 1);
+
+  const page = Math.min(
+    Math.max(currentPage, 1),
+    safeTotalPages
+  );
+
+  const startIndex = (page - 1) * postsPerPage;
+
+  const currentBlogs = filteredBlogs.slice(
+    startIndex,
+    startIndex + postsPerPage
+  );
+
+  // Previous
+  const previousUrl =
+    page > 1
+      ? `/?page=${page - 1}${
+          query
+            ? `&q=${encodeURIComponent(query)}`
+            : ""
+        }`
+      : "#";
+
+  // Next
+  const nextUrl =
+    page < safeTotalPages
+      ? `/?page=${page + 1}${
+          query
+            ? `&q=${encodeURIComponent(query)}`
+            : ""
+        }`
+      : "#";
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.js
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <>
+      <Header />
+
+      <main className="mx-auto max-w-6xl px-6 py-12">
+
+        {/* BLOGS */}
+        {currentBlogs.length > 0 ? (
+          <>
+            <section className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {currentBlogs.map((blog) => (
+                <PostCard
+                  key={blog._id}
+                  image={blog.image}
+                  title={blog.title}
+                  description={blog.description}
+                  slug={blog.slug}
+                  date={
+                    blog.createdAt
+                      ? new Date(
+                          blog.createdAt
+                        ).toLocaleString("en-IN", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : ""
+                  }
+                />
+              ))}
+            </section>
+
+            {/* PAGINATION */}
+            <div className="mt-10 flex items-center justify-between">
+
+              {/* PREVIOUS */}
+              {page > 1 ? (
+                <a
+                  href={previousUrl}
+                  className="rounded-md border border-gray-200 bg-white px-5 py-3 font-semibold text-gray-600 shadow-sm hover:bg-gray-50"
+                >
+                  Previous
+                </a>
+              ) : (
+                <button
+                  disabled
+                  className="cursor-not-allowed rounded-md border border-gray-200 bg-white px-5 py-3 font-semibold text-gray-400 shadow-sm"
+                >
+                  Previous
+                </button>
+              )}
+
+              {/* PAGE NUMBER */}
+              <span className="text-sm text-gray-500">
+                Page {page} of {safeTotalPages}
+              </span>
+
+              {/* NEXT */}
+              {page < safeTotalPages ? (
+                <a
+                  href={nextUrl}
+                  className="rounded-md border border-gray-200 bg-white px-5 py-3 font-semibold text-gray-600 shadow-sm hover:bg-gray-50"
+                >
+                  Next
+                </a>
+              ) : (
+                <button
+                  disabled
+                  className="cursor-not-allowed rounded-md border border-gray-200 bg-white px-5 py-3 font-semibold text-gray-400 shadow-sm"
+                >
+                  Next
+                </button>
+              )}
+
+            </div>
+          </>
+        ) : (
+          <div className="py-20 text-center">
+            <h2 className="text-2xl font-bold text-gray-800">
+              No posts found
+            </h2>
+
+            <p className="mt-2 text-gray-500">
+              Try another keyword.
+            </p>
+          </div>
+        )}
+
       </main>
-    </div>
+
+      <Footer />
+    </>
   );
 }
